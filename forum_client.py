@@ -193,24 +193,19 @@ class ForumClient:
             "Attachments": []
         }
 
-        # Use isolated request headers to match user's working manual script
-        # Note: We use existing Session User-Agent to avoid consistency flags, but strip everything else.
-        headers = {
-            'User-Agent': self.session.headers.get('User-Agent'),
-            'Accept': "application/json, text/plain, */*",
-            'Authorization': f"Bearer {self.token}",
-            'origin': self.origin
-        }
-
-        payload = {
-            "request": json.dumps(inner_request, separators=(',', ':'), ensure_ascii=False)
+        # Use files format for multipart/form-data submission
+        # The tuple format is: (filename, content)
+        # When filename=None, it creates a plain form field (not a file upload)
+        files = {
+            "request": (
+                None,
+                json.dumps(inner_request, separators=(',', ':'), ensure_ascii=False)
+            )
         }
 
         try:
-            # 1. Reply
-            # Use requests.post directly (not session) to avoid hidden header merging (like Referer)
-            # This matches the user's manual "hardcoded" approach
-            response = requests.post(url_reply, data=payload, headers=headers)
+            # 1. Reply using self.session
+            response = self.session.post(url_reply, files=files)
             response.raise_for_status()
             
             # Response is the new Conversation GUID (string)
@@ -222,8 +217,9 @@ class ForumClient:
             url_like = f"{self.command_url}/ConversationService/LikeConversation"
             like_payload = {"ConversationGuid": new_reply_guid}
             
-            # Also use isolated request for Like to be safe
-            requests.post(url_like, json=like_payload, headers=headers)
+            # Use self.session for Like request as well
+            _like_response = self.session.post(url_like, json=like_payload)
+            _like_response.raise_for_status()
             logger.info("Like successful.")
 
             return True
