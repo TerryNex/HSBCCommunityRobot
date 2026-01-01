@@ -217,7 +217,8 @@ class ForumClient:
             like_payload = {"ConversationGuid": new_reply_guid}
             
             # Use self.session for Like request as well
-            self.session.post(url_like, json=like_payload)
+            like_response = self.session.post(url_like, json=like_payload)
+            like_response.raise_for_status()
             logger.info("Like successful.")
 
             return True
