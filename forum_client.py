@@ -194,7 +194,8 @@ class ForumClient:
         }
 
         # Use files format for multipart/form-data submission
-        # (filename, content); filename=None indicates a plain field without filename
+        # The tuple format is: (filename, content)
+        # When filename=None, it creates a plain form field (not a file upload)
         files = {
             "request": (
                 None,
@@ -217,8 +218,8 @@ class ForumClient:
             like_payload = {"ConversationGuid": new_reply_guid}
             
             # Use self.session for Like request as well
-            like_response = self.session.post(url_like, json=like_payload)
-            like_response.raise_for_status()
+            _like_response = self.session.post(url_like, json=like_payload)
+            _like_response.raise_for_status()
             logger.info("Like successful.")
 
             return True
