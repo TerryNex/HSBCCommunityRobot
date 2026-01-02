@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import requests
 
@@ -150,12 +151,23 @@ class ForumClient:
         """Step 5: Get Conversations in Room."""
         logger.info(f"Step 5: Fetching conversations for room {room_guid}...")
         url = f"{self.command_url}/ForumService/GetConversationsInRoom"
+        
+        # Read CONVERSATION_LIMIT from environment variable with default of 5
+        try:
+            limit = int(os.getenv("CONVERSATION_LIMIT", "5"))
+        except (ValueError, TypeError):
+            limit = 5
+            logger.warning("Invalid CONVERSATION_LIMIT, using default: 5")
+
+        if limit < 1:
+            logger.warning(f"CONVERSATION_LIMIT must be at least 1, using default: 5 (got {limit})")
+            limit = 5
 
         payload = {
             "pageGuid": page_guid,
             "roomGuid": room_guid,
             "pageNumber": 1,
-            "limit": 1
+            "limit": limit
         }
 
         try:
