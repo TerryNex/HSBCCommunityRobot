@@ -182,6 +182,7 @@ class ForumClient:
                     "roomGUID": item.get("RoomGuid"), # Specific room GUID for reply
                     "content": item.get("Message", "") or item.get("Title", ""),
                     "title": item.get("Title", ""),
+                    "username": item.get("ParticipantDisplayName", "") or item.get("CreatedByName", "Unknown"),
                     "isLiked": item.get("IsLiked", False)
                 })
             return conversations

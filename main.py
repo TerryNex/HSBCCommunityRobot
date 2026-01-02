@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 from ai_handler import AIHandler
-from db_manager import DatabaseManager
+from git_storage import GitStorage
 from forum_client import ForumClient
 from utils import human_delay, logger
 
@@ -14,7 +14,7 @@ def main():
     logger.info("Starting Forum Reply Automator (6-Step Logic)...")
 
     # Initialize components
-    db = DatabaseManager()
+    storage = GitStorage()
     ai = AIHandler()
 
     forum_url = os.getenv("FORUM_BASE_URL")
@@ -70,7 +70,7 @@ def main():
         # 5. Get Conversations
         conversations = client.get_conversations(room_guid, page_guid)
 
-        new_convos = [c for c in conversations if not db.is_replied(c['conversationID'])]
+        new_convos = [c for c in conversations if not storage.is_replied(c['conversationID'])]
 
         if not new_convos:
             logger.info(f"No new posts in room {room_title}. Moving to next...")
@@ -81,11 +81,16 @@ def main():
         for convo in new_convos:
             convo_id = convo['conversationID']
             content = convo.get('content', '')
+            title = convo.get('title', 'No Title')
+            username = convo.get('username', 'Unknown')
 
             logger.info(f"Processing post {convo_id}...")
+            logger.info(f"   Title: {title}")
+            logger.info(f"   Username: {username}")
+            logger.info(f"   Message: {content}")
 
             # 6. Generate AI reply
-            reply_content = ai.generate_reply(content)
+            reply_content = ai.generate_reply(content, title)
 
             # test replay content
             logger.info(f"Generated reply: {reply_content}")
@@ -97,7 +102,7 @@ def main():
                 # 6. Submit reply and Like (Use specific room GUID from post if available)
                 target_room_guid = convo.get('roomGUID', room_guid)
                 if client.reply_and_like(target_room_guid, convo_id, reply_content):
-                    db.mark_as_replied(convo_id)
+                    storage.mark_as_replied(convo_id)
                     logger.info(f"Successfully processed post {convo_id}.")
                 else:
                     logger.error(f"Failed to process post {convo_id}.")

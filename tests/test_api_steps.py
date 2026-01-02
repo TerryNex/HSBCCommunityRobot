@@ -19,8 +19,9 @@ def ai_handler():
 
 def test_perplexity_api(ai_handler):
     """Test Perplexity AI response generation."""
+    test_title = "2024年科技發展"
     test_content = "如何評價 2024 年的科技發展？"
-    reply = ai_handler.generate_reply(test_content)
+    reply = ai_handler.generate_reply(test_content, test_title)
     assert reply is not None
     assert len(reply) > 0
     print(f"\nPerplexity Reply: {reply}")
