@@ -106,7 +106,7 @@ class ForumClient:
             target_name = "傾下講下"
             for page in data.get("List", []):
                 if page.get("Name") == target_name:
-                    logger.info(f"Bufound page '{target_name}' with GUID: {page['Guid']}")
+                    logger.info(f"Found page '{target_name}' with GUID: {page['Guid']}")
                     return {"pageGUID": page['Guid']}
 
             logger.error(f"Page '{target_name}' not found.")
