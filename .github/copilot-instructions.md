@@ -43,7 +43,7 @@ To set up:
 1. Copy `.env.example` to `.env`
 2. Fill in required values:
    - `AI_API_KEY`: Perplexity AI API key
-   - `AI_MODEL`: AI model name (default: "sonar")
+   - `AI_MODEL`: AI model name (code default: "sonar", .env.example shows "gemini-1.5-flash")
    - `FORUM_BASE_URL`: Forum base URL
    - `FORUM_USERNAME`: Forum login username
    - `FORUM_PASSWORD`: Forum login password
@@ -243,9 +243,7 @@ pip install requests python-dotenv
 **Cause**: Invalid credentials or expired session
 **Solution**: Check FORUM_USERNAME and FORUM_PASSWORD in .env
 
-### Issue: "Bufound page" typo in logs
-**Cause**: Typo in forum_client.py line 109 ("Bufound" should be "Found")
-**Note**: This is a known cosmetic issue and does not affect functionality
+
 
 ### Issue: Database locked errors
 **Cause**: Multiple instances accessing replied_posts.db simultaneously
