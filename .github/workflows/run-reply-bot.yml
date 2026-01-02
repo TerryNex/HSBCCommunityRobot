@@ -22,11 +22,14 @@ jobs:
   run-reply-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # Changed from read to write to allow commits
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -37,11 +40,15 @@ jobs:
         run: |
           pip install requests python-dotenv
       
-      - name: Download previous replied posts database
-        uses: actions/download-artifact@v4
+      - name: Download previous replied posts data
         continue-on-error: true
-        with:
-          name: replied-posts-db
+        run: |
+          # Try to get the latest replied_posts.json from the repository
+          if [ -f replied_posts.json ]; then
+            echo "replied_posts.json already exists in checkout"
+          else
+            echo "No previous replied_posts.json found, will start fresh"
+          fi
       
       - name: Determine conversation limit
         id: determine-limit
@@ -77,15 +84,24 @@ jobs:
         run: |
           python main.py
       
-      - name: Upload replied posts database
+      - name: Commit and push replied posts data
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: replied-posts-db
-          path: replied_posts.db
-          retention-days: 90
-          if-no-files-found: warn
-          # Note: Artifacts are retained for 90 days. After expiration, the database
-          # will be lost and the bot may reply to previously replied posts on the next run.
-          # To prevent this, ensure the workflow is run at least once every 90 days,
-          # or consider using a more permanent storage solution (e.g., GitHub repository commit).
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Add the replied_posts.json file if it exists and has changes
+          if [ -f replied_posts.json ]; then
+            git add replied_posts.json
+            
+            # Only commit if there are changes
+            if git diff --staged --quiet; then
+              echo "No changes to replied_posts.json, skipping commit"
+            else
+              git commit -m "chore: update replied posts data [skip ci]"
+              git push
+              echo "Successfully committed and pushed replied posts data"
+            fi
+          else
+            echo "replied_posts.json not found, nothing to commit"
+          fi

@@ -98,12 +98,14 @@ jobs:
                   title = convo.get('title', 'No Title')
                   content = convo.get('content', '')
                   convo_id = convo.get('conversationID', '')
+                  username = convo.get('username', 'Unknown')
                   
                   # Preview first 100 characters of content
                   preview = content[:100] + '...' if len(content) > 100 else content
                   
                   logger.info(f"\n{i}. [{convo_id}]")
                   logger.info(f"   Title: {title}")
+                  logger.info(f"   Username: {username}")
                   logger.info(f"   Message: {preview}")
           
           logger.info(f"\n{'='*60}")
