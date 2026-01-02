@@ -26,7 +26,7 @@ def main():
     if not room_titles_str or not room_titles_str.strip():
         allowed_room_titles = ["Recent Subjects"]
     else:
-        allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
+        allowed_room_titles = [title.strip() for title in room_titles_str.split(",") if title.strip()]
     logger.info(f"Allowed room titles: {allowed_room_titles}")
 
     client = ForumClient(forum_url, username, password)
