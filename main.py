@@ -20,6 +20,11 @@ def main():
     forum_url = os.getenv("FORUM_BASE_URL")
     username = os.getenv("FORUM_USERNAME")
     password = os.getenv("FORUM_PASSWORD")
+    
+    # Parse ROOM_TITLES from environment variable
+    room_titles_str = os.getenv("ROOM_TITLES", "Recent Subjects")
+    allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
+    logger.info(f"Allowed room titles: {allowed_room_titles}")
 
     client = ForumClient(forum_url, username, password)
 
@@ -53,9 +58,8 @@ def main():
     for room in priority_rooms:
         room_guid = room['roomGUID']
         room_title = room['title']
-        # only check room name in '精明消費' '理財有道' '其他'
-        # if room_title not in ['Recent Subjects', '精明消費', '理財有道', '其他']:
-        if room_title not in ['Recent Subjects']:
+        # Check if room title is in the allowed list from environment variable
+        if room_title not in allowed_room_titles:
             logger.info(f"Skipping room: {room_title} ({room_guid})")
             continue
         logger.info(f"Checking room: {room_title} ({room_guid})")

@@ -1,0 +1,84 @@
+name: Run Reply Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      conversation_limit_choice:
+        description: 'How many conversations to process?'
+        required: true
+        default: '5'
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '15'
+          - 'custom'
+      conversation_limit_custom:
+        description: 'Custom number of conversations (used only when choice is custom)'
+        required: false
+        type: string
+
+jobs:
+  run-reply-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests python-dotenv
+      
+      - name: Download previous replied posts database
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: replied-posts-db
+      
+      - name: Determine conversation limit
+        id: determine-limit
+        run: |
+          CHOICE="${{ github.event.inputs.conversation_limit_choice }}"
+          CUSTOM="${{ github.event.inputs.conversation_limit_custom }}"
+          
+          if [ "$CHOICE" = "custom" ] && [ -n "$CUSTOM" ]; then
+            # Validate that custom is a number
+            if [[ "$CUSTOM" =~ ^[0-9]+$ ]]; then
+              LIMIT="$CUSTOM"
+            else
+              echo "Invalid custom value, using default 5"
+              LIMIT="5"
+            fi
+          else
+            LIMIT="$CHOICE"
+          fi
+          
+          echo "limit=$LIMIT" >> $GITHUB_OUTPUT
+          echo "Final conversation limit: $LIMIT"
+      
+      - name: Run reply bot
+        env:
+          FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
+          FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
+          FORUM_PASSWORD: ${{ secrets.FORUM_PASSWORD }}
+          ROOM_TITLES: ${{ vars.ROOM_TITLES }}
+          CONVERSATION_LIMIT: ${{ steps.determine-limit.outputs.limit }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          RANDOM_DELAY_RANGE: ${{ vars.RANDOM_DELAY_RANGE }}
+        run: |
+          python main.py
+      
+      - name: Upload replied posts database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replied-posts-db
+          path: replied_posts.db
+          retention-days: 90

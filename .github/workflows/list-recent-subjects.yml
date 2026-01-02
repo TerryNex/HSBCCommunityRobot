@@ -1,0 +1,109 @@
+name: List Recent Subjects
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list-subjects:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests python-dotenv
+      
+      - name: List recent subjects
+        env:
+          FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
+          FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
+          FORUM_PASSWORD: ${{ secrets.FORUM_PASSWORD }}
+          ROOM_TITLES: ${{ vars.ROOM_TITLES }}
+          CONVERSATION_LIMIT: "30"
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+        run: |
+          python - <<'EOF'
+          import os
+          import logging
+          from forum_client import ForumClient
+          
+          # Configure logging
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+          logger = logging.getLogger(__name__)
+          
+          logger.info("=== Listing Recent Subjects ===")
+          
+          # Initialize ForumClient
+          forum_url = os.getenv("FORUM_BASE_URL")
+          username = os.getenv("FORUM_USERNAME")
+          password = os.getenv("FORUM_PASSWORD")
+          
+          client = ForumClient(forum_url, username, password)
+          
+          # Login
+          if not client.validate_session():
+              if not client.login():
+                  logger.error("Authentication failed.")
+                  exit(1)
+          
+          # Get page info
+          page_info = client.get_page_info()
+          if not page_info:
+              logger.error("Failed to get page info.")
+              exit(1)
+          
+          page_guid = page_info.get('pageGUID')
+          
+          # Get rooms
+          rooms = client.get_room_info(page_guid)
+          if not rooms:
+              logger.error("No rooms found.")
+              exit(1)
+          
+          # Parse allowed room titles
+          room_titles_str = os.getenv("ROOM_TITLES", "Recent Subjects")
+          allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
+          
+          logger.info(f"\nAllowed room titles: {allowed_room_titles}\n")
+          
+          # List conversations from allowed rooms
+          for room in rooms:
+              room_guid = room['roomGUID']
+              room_title = room['title']
+              
+              if room_title not in allowed_room_titles:
+                  continue
+              
+              logger.info(f"\n{'='*60}")
+              logger.info(f"Room: {room_title}")
+              logger.info(f"{'='*60}")
+              
+              conversations = client.get_conversations(room_guid)
+              
+              if not conversations:
+                  logger.info("No conversations found in this room.")
+                  continue
+              
+              for i, convo in enumerate(conversations, 1):
+                  title = convo.get('title', 'No Title')
+                  content = convo.get('content', '')
+                  convo_id = convo.get('conversationID', '')
+                  
+                  # Preview first 100 characters of content
+                  preview = content[:100] + '...' if len(content) > 100 else content
+                  
+                  logger.info(f"\n{i}. [{convo_id}]")
+                  logger.info(f"   Title: {title}")
+                  logger.info(f"   Message: {preview}")
+          
+          logger.info(f"\n{'='*60}")
+          logger.info("=== Listing Complete ===")
+          EOF
