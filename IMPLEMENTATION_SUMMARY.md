@@ -15,7 +15,7 @@ This PR successfully implements all requirements from the issue:
   - Automatically trims whitespace around each room title
   - Works with both `.env` files and GitHub Actions Repository variables
 
-#### 1.2 `CONVERSATION_LIMIT` Variable (forum_client.py line 158)
+#### 1.2 `CONVERSATION_LIMIT` Variable (forum_client.py line 157)
 - **Before**: Hardcoded `1`
 - **After**: Configurable via `CONVERSATION_LIMIT` environment variable
 - **Format**: Integer as string

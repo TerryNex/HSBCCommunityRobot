@@ -6,12 +6,12 @@ This document explains the environment variables and GitHub Actions workflows fo
 
 ### Required Variables
 
-These variables must be set in your `.env` file (local) or as GitHub Repository Variables/Secrets (GitHub Actions):
+These variables must be set in your `.env` file (local) or as GitHub Repository Variables (GitHub Actions):
 
 - `FORUM_BASE_URL` - Base URL of the forum
 - `FORUM_USERNAME` - Your forum username
-- `FORUM_PASSWORD` - Your forum password (use GitHub Secrets for Actions)
-- `AI_API_KEY` - API key for AI service (use GitHub Secrets for Actions)
+- `FORUM_PASSWORD` - Your forum password
+- `AI_API_KEY` - API key for AI service
 - `AI_MODEL` - AI model to use (e.g., `gemini-1.5-flash`)
 
 ### Optional Variables
@@ -20,11 +20,12 @@ These variables must be set in your `.env` file (local) or as GitHub Repository 
   - Comma-separated list of room titles to process
   - Example: `"Recent Subjects,精明消費,理財有道,其他"`
   - Whitespace around each title is automatically trimmed
+  - Empty or whitespace-only values will use the default
 
 - `CONVERSATION_LIMIT` (default: `5`)
   - Number of conversations to fetch per room
-  - Must be a valid integer
-  - Falls back to `5` if invalid or missing
+  - Must be a valid integer greater than or equal to 1
+  - Falls back to `5` if invalid, missing, or less than 1
 
 - `RANDOM_DELAY_RANGE` (default: `300`)
   - Maximum random delay in seconds for human-like behavior
@@ -57,17 +58,18 @@ These variables must be set in your `.env` file (local) or as GitHub Repository 
 ### Setup
 
 1. Go to your repository Settings → Secrets and variables → Actions
-2. Add the following **Secrets**:
-   - `FORUM_PASSWORD`
-   - `AI_API_KEY`
 
-3. Add the following **Variables**:
+2. Add the following **Variables** (all configuration is stored as plaintext variables):
    - `FORUM_BASE_URL`
    - `FORUM_USERNAME`
+   - `FORUM_PASSWORD`
+   - `AI_API_KEY`
    - `AI_MODEL`
    - `ROOM_TITLES` (e.g., `Recent Subjects,精明消費,理財有道`)
    - `CONVERSATION_LIMIT` (optional, defaults to workflow-specific values)
    - `RANDOM_DELAY_RANGE` (optional, defaults to 300)
+
+**Note:** All values are stored as Repository Variables rather than Secrets, as encryption is not required for this use case.
 
 ### Workflow 1: List Recent Subjects (Read-Only)
 

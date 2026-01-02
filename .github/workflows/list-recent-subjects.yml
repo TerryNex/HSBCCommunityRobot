@@ -26,11 +26,9 @@ jobs:
         env:
           FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
           FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
-          FORUM_PASSWORD: ${{ secrets.FORUM_PASSWORD }}
+          FORUM_PASSWORD: ${{ vars.FORUM_PASSWORD }}
           ROOM_TITLES: ${{ vars.ROOM_TITLES }}
           CONVERSATION_LIMIT: "30"
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          AI_MODEL: ${{ vars.AI_MODEL }}
         run: |
           python - <<'EOF'
           import os
@@ -71,8 +69,10 @@ jobs:
               exit(1)
           
           # Parse allowed room titles
-          room_titles_str = os.getenv("ROOM_TITLES", "Recent Subjects")
-          allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
+          room_titles_str = os.getenv("ROOM_TITLES")
+          if not room_titles_str or not room_titles_str.strip():
+              room_titles_str = "Recent Subjects"
+          allowed_room_titles = [title.strip() for title in room_titles_str.split(",") if title.strip()]
           
           logger.info(f"\nAllowed room titles: {allowed_room_titles}\n")
           

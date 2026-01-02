@@ -23,7 +23,10 @@ def main():
     
     # Parse ROOM_TITLES from environment variable
     room_titles_str = os.getenv("ROOM_TITLES", "Recent Subjects")
-    allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
+    if not room_titles_str or not room_titles_str.strip():
+        allowed_room_titles = ["Recent Subjects"]
+    else:
+        allowed_room_titles = [title.strip() for title in room_titles_str.split(",")]
     logger.info(f"Allowed room titles: {allowed_room_titles}")
 
     client = ForumClient(forum_url, username, password)

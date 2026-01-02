@@ -68,10 +68,10 @@ jobs:
         env:
           FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
           FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
-          FORUM_PASSWORD: ${{ secrets.FORUM_PASSWORD }}
+          FORUM_PASSWORD: ${{ vars.FORUM_PASSWORD }}
           ROOM_TITLES: ${{ vars.ROOM_TITLES }}
           CONVERSATION_LIMIT: ${{ steps.determine-limit.outputs.limit }}
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_KEY: ${{ vars.AI_API_KEY }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           RANDOM_DELAY_RANGE: ${{ vars.RANDOM_DELAY_RANGE }}
         run: |
@@ -84,6 +84,7 @@ jobs:
           name: replied-posts-db
           path: replied_posts.db
           retention-days: 90
+          if-no-files-found: warn
           # Note: Artifacts are retained for 90 days. After expiration, the database
           # will be lost and the bot may reply to previously replied posts on the next run.
           # To prevent this, ensure the workflow is run at least once every 90 days,

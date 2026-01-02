@@ -157,7 +157,11 @@ class ForumClient:
             limit = int(os.getenv("CONVERSATION_LIMIT", "5"))
         except (ValueError, TypeError):
             limit = 5
-            logger.warning(f"Invalid CONVERSATION_LIMIT, using default: {limit}")
+            logger.warning("Invalid CONVERSATION_LIMIT, using default: 5")
+
+        if limit < 1:
+            logger.warning(f"CONVERSATION_LIMIT must be at least 1, using default: 5 (got {limit})")
+            limit = 5
 
         payload = {
             "pageGuid": page_guid,
