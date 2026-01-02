@@ -21,6 +21,8 @@ on:
 jobs:
   run-reply-bot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout repository
@@ -82,3 +84,7 @@ jobs:
           name: replied-posts-db
           path: replied_posts.db
           retention-days: 90
+          # Note: Artifacts are retained for 90 days. After expiration, the database
+          # will be lost and the bot may reply to previously replied posts on the next run.
+          # To prevent this, ensure the workflow is run at least once every 90 days,
+          # or consider using a more permanent storage solution (e.g., GitHub repository commit).
