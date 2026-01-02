@@ -65,7 +65,7 @@ def main():
         logger.info(f"Checking room: {room_title} ({room_guid})")
 
         # 5. Get Conversations
-        conversations = client.get_conversations(room_guid)
+        conversations = client.get_conversations(room_guid, page_guid)
 
         new_convos = [c for c in conversations if not db.is_replied(c['conversationID'])]
 

@@ -86,7 +86,7 @@ jobs:
               logger.info(f"Room: {room_title}")
               logger.info(f"{'='*60}")
               
-              conversations = client.get_conversations(room_guid)
+              conversations = client.get_conversations(room_guid, page_guid)
               
               if not conversations:
                   logger.info("No conversations found in this room.")
