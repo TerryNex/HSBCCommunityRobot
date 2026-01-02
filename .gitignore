@@ -33,3 +33,7 @@ __pycache__/
 
 # Ignore virtual environment
 venv/
+
+# Ignore sensitive configuration and database files
+config.json
+replied_posts.db

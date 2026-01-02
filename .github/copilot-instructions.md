@@ -26,7 +26,7 @@
 pip install requests python-dotenv
 ```
 
-For testing, also install:
+If you plan to run tests, also install the optional testing dependency:
 ```bash
 pip install pytest
 ```
@@ -43,7 +43,9 @@ To set up:
 1. Copy `.env.example` to `.env`
 2. Fill in required values:
    - `AI_API_KEY`: Perplexity AI API key
-   - `AI_MODEL`: AI model name (code default: "sonar", .env.example shows "gemini-1.5-flash")
+   - `AI_MODEL`: AI model name  
+     - code default: "sonar"  
+     - example in .env.example: "gemini-1.5-flash"
    - `FORUM_BASE_URL`: Forum base URL
    - `FORUM_USERNAME`: Forum login username
    - `FORUM_PASSWORD`: Forum login password
@@ -143,7 +145,7 @@ python3 main.py
   - `get_room_info()`: Get list of rooms in page
   - `get_conversations()`: Get posts in a room
   - `reply_and_like()`: Submit reply (multipart/form-data) and like
-- **Critical**: Uses `files` parameter for reply submission, not `data` or `json`
+- **Critical**: Uses `files` parameter for reply submission, not `data` or `json`; this causes `requests` to set the `Content-Type` header to `multipart/form-data`, which is what the Square Community API expects for replies.
 
 **ai_handler.py** (AI Integration)
 - `AIHandler` class for Perplexity AI integration
@@ -174,17 +176,19 @@ python3 main.py
 ### Configuration Files
 
 **config.json** (Auto-generated)
-- Stores authentication token from login
+- Stores authentication token from login (sensitive credential)
 - Created/updated by `config_manager.py`
 - **Do not manually edit** - managed by application
+- **Security**: This file must **never** be committed to version control when it contains real credentials or tokens. Ensure it is ignored by `.gitignore` in any real deployment or when using live accounts.
 
 **replied_posts.db** (Auto-generated)
 - SQLite database tracking replied posts
 - Created by `db_manager.py` on first run
+- May contain data tied to your account/activity; it is recommended to ignore this file in `.gitignore` as well.
 
 **.gitignore**
 - Excludes: logs, temp files, .env files, IDE files, __pycache__, venv
-- **Important**: Excludes .env but NOT config.json or replied_posts.db
+- **Important**: Also configure `.gitignore` to exclude `config.json` and `replied_posts.db`, because `config.json` can contain authentication tokens and other sensitive data. Files containing real credentials or tokens must **never** be committed.
 
 ## Testing
 
@@ -283,7 +287,8 @@ When modifying `forum_client.py`, **always**:
 ### Credentials
 - **Never hardcode** API keys, passwords, or tokens in source code
 - Always use .env for sensitive configuration
-- config.json contains auth token - avoid committing if contains real credentials
+- Do **not** commit any `config.json` file that contains real tokens or credentials
+- You may commit a sanitized example `config.json` (with dummy/non-functional values only); ensure the real `config.json` with live tokens is excluded from version control (e.g. via `.gitignore`)
 - .gitignore properly excludes .env files
 
 ### API Usage
@@ -324,7 +329,9 @@ Before committing changes:
 - Use `python3 -m pytest` (not just `pytest`) for consistency
 - Check if .env exists before expecting tests to pass fully
 - Use session-based HTTP requests in forum_client.py
-- Include proper error handling with raise_for_status()
+- Include proper HTTP error handling:
+  - By default, call `response.raise_for_status()` for requests where you don't need to handle specific status codes.
+  - For flows that intentionally branch on status codes (e.g., `validate_session` in `forum_client.py`), prefer explicit status checks instead of `raise_for_status()`.
 - Test syntax before running full tests
 - Trust that this instructions file is accurate - only search if information seems incomplete
 
