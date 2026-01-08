@@ -83,13 +83,13 @@ def is_within_hours(date_str, hours):
         hours: Number of hours to look back
         
     Returns:
-        True if date is within the time window or if parsing fails, False otherwise
+        True if date is within the time window, False otherwise (including parse failures)
     """
     if not hours:
         return True
     dt = parse_iso_date(date_str)
     if not dt:
-        return True
+        return False
     now_hk = datetime.now(HK_TIMEZONE)
     cutoff = now_hk - timedelta(hours=int(hours))
     return dt.astimezone(HK_TIMEZONE) >= cutoff

@@ -1,35 +1,13 @@
-import logging
 import os
-from datetime import datetime, timezone, timedelta
 
 from dotenv import load_dotenv
 
 from ai_handler import AIHandler
 from git_storage import GitStorage
 from forum_client import ForumClient
-from utils import human_delay, logger, is_within_hours, HK_TIMEZONE
+from utils import human_delay, logger, is_within_hours
 
 load_dotenv()
-
-
-def is_post_within_hours(date_posted_str, hours_filter):
-    """
-    Check if a post was posted within the last X hours.
-    Uses shared utility function for date parsing.
-    
-    Args:
-        date_posted_str: ISO 8601 timestamp e.g. "2026-01-07T15:04:51.870Z"
-        hours_filter: Number of hours to look back
-        
-    Returns:
-        True if post is within the time window, False otherwise
-    """
-    if not date_posted_str or not hours_filter:
-        return True  # If no date or filter, consider it valid
-    
-    result = is_within_hours(date_posted_str, hours_filter)
-    logger.debug(f"Post date: {date_posted_str}, within {hours_filter}h: {result}")
-    return result
 
 def main():
     logger.info("Starting Forum Reply Automator (6-Step Logic)...")
@@ -111,7 +89,7 @@ def main():
         if hours_filter:
             # Time-based filtering: only posts within the last X hours
             new_convos = [c for c in conversations 
-                         if is_post_within_hours(c.get('datePosted', ''), hours_filter)
+                         if is_within_hours(c.get('datePosted', ''), hours_filter)
                          and not storage.is_replied(c['conversationID'])]
             logger.info(f"Filtered to {len(new_convos)} posts within last {hours_filter} hours (and not replied)")
         else:

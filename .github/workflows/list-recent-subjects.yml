@@ -83,9 +83,17 @@ jobs:
           logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
           logger = logging.getLogger(__name__)
           
-          # Get hours filter
-          hours_filter = os.getenv("HOURS_FILTER", "")
-          hours_filter = int(hours_filter) if hours_filter and hours_filter.strip() else None
+          # Get hours filter with proper error handling
+          hours_filter_raw = os.getenv("HOURS_FILTER", "")
+          hours_filter = None
+          if hours_filter_raw and hours_filter_raw.strip():
+              try:
+                  hours_filter = int(hours_filter_raw)
+              except ValueError:
+                  logger.warning(
+                      "Invalid HOURS_FILTER value '%s'; falling back to no time filter.",
+                      hours_filter_raw,
+                  )
           
           logger.info("=== Listing Forum Posts ===")
           if hours_filter:
