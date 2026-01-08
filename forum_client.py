@@ -24,12 +24,16 @@ class ForumClient:
         self.config = ConfigManager()
         self.session = requests.Session()
 
-        # Base headers used across requests
+        # Base headers used across requests (matching actual browser headers)
+        # squareguid and clientguid are platform identifiers for the HSBC Community
         self.session.headers.update({
             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             'Accept': "application/json, text/plain, */*",
+            'Content-Type': "application/json",
             'origin': self.origin,
-            'referer': f"{self.origin}/"
+            'referer': f"{self.origin}/",
+            'squareguid': os.getenv("SQUARE_GUID", "bef72afd-098a-427f-a0a8-298af4aba1af"),
+            'clientguid': os.getenv("CLIENT_GUID", "9b579d63-9a66-4685-9c43-f665a790a3fb")
         })
 
         # Load token if exists
@@ -128,16 +132,30 @@ class ForumClient:
 
             rooms = []
 
-            # Note: "Recent Subjects" virtual room removed as it's now deprecated
-            # Use specific room titles like: 精明消費, 理財有道, 環球智庫, 加點保障, 靈活信貸, 其他
+            # Parse rooms from API response
+            api_rooms = data.get("Rooms", [])
+            logger.debug(f"API returned {len(api_rooms)} rooms")
 
-            for room in data.get("Rooms", []):
-                if room.get("IsVisible"):
-                    rooms.append({
-                        "roomGUID": room["Guid"],
-                        "title": room["Name"],
-                        "topicCount": room.get("ConversationsCount", 0)
-                    })
+            for room in api_rooms:
+                room_name = room.get("Name", "")
+                room_guid = room.get("Guid")
+                is_visible = room.get("IsVisible", False)
+                logger.debug(f"Room: '{room_name}', IsVisible: {is_visible}")
+                
+                # Skip rooms without a GUID
+                if not room_guid:
+                    logger.warning(f"Skipping room '{room_name}' - missing Guid")
+                    continue
+                
+                # Include all rooms, even if not visible (to support virtual rooms like "Recent Subjects")
+                rooms.append({
+                    "roomGUID": room_guid,
+                    "title": room_name,
+                    "topicCount": room.get("ConversationsCount", 0),
+                    "isVisible": is_visible
+                })
+            
+            logger.info(f"Found {len(rooms)} rooms: {[r['title'] for r in rooms]}")
             return rooms
         except Exception as e:
             logger.error(f"Get room info failed: {e}")
@@ -178,7 +196,7 @@ class ForumClient:
                     "roomGUID": item.get("RoomGuid"), # Specific room GUID for reply
                     "content": item.get("Message", "") or item.get("Title", ""),
                     "title": item.get("Title", ""),
-                    "username": item.get("ParticipantDisplayName", "") or item.get("CreatedByName", "Unknown"),
+                    "username": item.get("Username", "") or item.get("ParticipantDisplayName", "") or item.get("CreatedByName", "Unknown"),
                     "isLiked": item.get("IsLiked", False),
                     "datePosted": item.get("DatePosted", "")  # ISO 8601 timestamp e.g. "2026-01-07T15:04:51.870Z"
                 })
