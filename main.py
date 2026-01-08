@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from ai_handler import AIHandler
 from git_storage import GitStorage
 from forum_client import ForumClient
-from utils import human_delay, logger
+from utils import human_delay, logger, is_within_hours, HK_TIMEZONE
 
 load_dotenv()
 
@@ -15,7 +15,7 @@ load_dotenv()
 def is_post_within_hours(date_posted_str, hours_filter):
     """
     Check if a post was posted within the last X hours.
-    Converts UTC time to Hong Kong time (UTC+8) for comparison.
+    Uses shared utility function for date parsing.
     
     Args:
         date_posted_str: ISO 8601 timestamp e.g. "2026-01-07T15:04:51.870Z"
@@ -27,32 +27,9 @@ def is_post_within_hours(date_posted_str, hours_filter):
     if not date_posted_str or not hours_filter:
         return True  # If no date or filter, consider it valid
     
-    try:
-        # Parse the ISO 8601 timestamp
-        # Handle both with and without milliseconds
-        if '.' in date_posted_str:
-            # Remove the 'Z' and parse with milliseconds
-            date_posted_str = date_posted_str.rstrip('Z')
-            post_time = datetime.fromisoformat(date_posted_str).replace(tzinfo=timezone.utc)
-        else:
-            post_time = datetime.fromisoformat(date_posted_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-        
-        # Convert to Hong Kong time (UTC+8)
-        hk_timezone = timezone(timedelta(hours=8))
-        post_time_hk = post_time.astimezone(hk_timezone)
-        
-        # Get current time in Hong Kong
-        now_hk = datetime.now(hk_timezone)
-        
-        # Calculate the cutoff time
-        cutoff_time = now_hk - timedelta(hours=hours_filter)
-        
-        logger.debug(f"Post time (HK): {post_time_hk}, Cutoff: {cutoff_time}, Now (HK): {now_hk}")
-        
-        return post_time_hk >= cutoff_time
-    except Exception as e:
-        logger.warning(f"Failed to parse date '{date_posted_str}': {e}")
-        return True  # If parsing fails, consider it valid to avoid missing posts
+    result = is_within_hours(date_posted_str, hours_filter)
+    logger.debug(f"Post date: {date_posted_str}, within {hours_filter}h: {result}")
+    return result
 
 def main():
     logger.info("Starting Forum Reply Automator (6-Step Logic)...")

@@ -76,46 +76,12 @@ jobs:
           python - <<'EOF'
           import os
           import logging
-          from datetime import datetime, timezone, timedelta
           from forum_client import ForumClient
+          from utils import format_hk_time, is_within_hours
           
           # Configure logging
           logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
           logger = logging.getLogger(__name__)
-          
-          def parse_date(date_str):
-              """Parse ISO 8601 date string to datetime object."""
-              if not date_str:
-                  return None
-              try:
-                  if '.' in date_str:
-                      date_str = date_str.rstrip('Z')
-                      return datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
-                  else:
-                      return datetime.fromisoformat(date_str.rstrip('Z')).replace(tzinfo=timezone.utc)
-              except:
-                  return None
-          
-          def format_hk_time(date_str):
-              """Convert UTC to Hong Kong time (UTC+8) and format."""
-              dt = parse_date(date_str)
-              if not dt:
-                  return "Unknown"
-              hk_tz = timezone(timedelta(hours=8))
-              hk_time = dt.astimezone(hk_tz)
-              return hk_time.strftime("%Y-%m-%d %H:%M:%S HKT")
-          
-          def is_within_hours(date_str, hours):
-              """Check if date is within the last X hours."""
-              if not hours:
-                  return True
-              dt = parse_date(date_str)
-              if not dt:
-                  return True
-              hk_tz = timezone(timedelta(hours=8))
-              now_hk = datetime.now(hk_tz)
-              cutoff = now_hk - timedelta(hours=int(hours))
-              return dt.astimezone(hk_tz) >= cutoff
           
           # Get hours filter
           hours_filter = os.getenv("HOURS_FILTER", "")
@@ -195,7 +161,7 @@ jobs:
               date_posted = convo.get('datePosted', '')
               room_title = convo.get('room_title', 'Unknown')
               
-              # Format time to HK timezone
+              # Format time to HK timezone using shared utility
               hk_time = format_hk_time(date_posted)
               
               # Preview first 100 characters of content
