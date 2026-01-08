@@ -25,14 +25,15 @@ class ForumClient:
         self.session = requests.Session()
 
         # Base headers used across requests (matching actual browser headers)
+        # squareguid and clientguid are platform identifiers for the HSBC Community
         self.session.headers.update({
             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             'Accept': "application/json, text/plain, */*",
             'Content-Type': "application/json",
             'origin': self.origin,
             'referer': f"{self.origin}/",
-            'squareguid': "bef72afd-098a-427f-a0a8-298af4aba1af",
-            'clientguid': "9b579d63-9a66-4685-9c43-f665a790a3fb"
+            'squareguid': os.getenv("SQUARE_GUID", "bef72afd-098a-427f-a0a8-298af4aba1af"),
+            'clientguid': os.getenv("CLIENT_GUID", "9b579d63-9a66-4685-9c43-f665a790a3fb")
         })
 
         # Load token if exists
@@ -137,12 +138,18 @@ class ForumClient:
 
             for room in api_rooms:
                 room_name = room.get("Name", "")
+                room_guid = room.get("Guid")
                 is_visible = room.get("IsVisible", False)
                 logger.debug(f"Room: '{room_name}', IsVisible: {is_visible}")
                 
+                # Skip rooms without a GUID
+                if not room_guid:
+                    logger.warning(f"Skipping room '{room_name}' - missing Guid")
+                    continue
+                
                 # Include all rooms, even if not visible (to support virtual rooms like "Recent Subjects")
                 rooms.append({
-                    "roomGUID": room["Guid"],
+                    "roomGUID": room_guid,
                     "title": room_name,
                     "topicCount": room.get("ConversationsCount", 0),
                     "isVisible": is_visible
