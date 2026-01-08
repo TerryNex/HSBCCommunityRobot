@@ -1,7 +1,24 @@
-name: List Recent Subjects
+name: List Forum Posts
 
 on:
   workflow_dispatch:
+    inputs:
+      hours_filter_choice:
+        description: 'Show posts within last X hours (optional)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - '12'
+          - '24'
+          - '48'
+          - '72'
+          - 'custom'
+      hours_filter_custom:
+        description: 'Custom hours filter (used only when choice is custom)'
+        required: false
+        type: string
 
 jobs:
   list-subjects:
@@ -22,24 +39,67 @@ jobs:
         run: |
           pip install requests python-dotenv
       
-      - name: List recent subjects
+      - name: Determine hours filter
+        id: determine-hours
+        run: |
+          CHOICE="${{ github.event.inputs.hours_filter_choice }}"
+          CUSTOM="${{ github.event.inputs.hours_filter_custom }}"
+          
+          if [ "$CHOICE" = "all" ]; then
+            HOURS=""
+            echo "Hours filter: disabled (showing all posts)"
+          elif [ "$CHOICE" = "custom" ] && [ -n "$CUSTOM" ]; then
+            if [[ "$CUSTOM" =~ ^[0-9]+$ ]]; then
+              HOURS="$CUSTOM"
+            else
+              echo "Invalid custom hours value, showing all posts"
+              HOURS=""
+            fi
+          else
+            HOURS="$CHOICE"
+          fi
+          
+          echo "hours=$HOURS" >> $GITHUB_OUTPUT
+          if [ -n "$HOURS" ]; then
+            echo "Hours filter: $HOURS hours"
+          fi
+      
+      - name: List forum posts
         env:
           FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
           FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
           FORUM_PASSWORD: ${{ vars.FORUM_PASSWORD }}
           ROOM_TITLES: ${{ vars.ROOM_TITLES }}
           CONVERSATION_LIMIT: "30"
+          HOURS_FILTER: ${{ steps.determine-hours.outputs.hours }}
         run: |
           python - <<'EOF'
           import os
           import logging
           from forum_client import ForumClient
+          from utils import format_hk_time, is_within_hours
           
           # Configure logging
           logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
           logger = logging.getLogger(__name__)
           
-          logger.info("=== Listing Recent Subjects ===")
+          # Get hours filter with proper error handling
+          hours_filter_raw = os.getenv("HOURS_FILTER", "")
+          hours_filter = None
+          if hours_filter_raw and hours_filter_raw.strip():
+              try:
+                  hours_filter = int(hours_filter_raw)
+              except ValueError:
+                  logger.warning(
+                      "Invalid HOURS_FILTER value '%s'; falling back to no time filter.",
+                      hours_filter_raw,
+                  )
+          
+          logger.info("=== Listing Forum Posts ===")
+          if hours_filter:
+              logger.info(f"Filter: Posts within last {hours_filter} hours")
+          else:
+              logger.info("Filter: All posts (no time filter)")
           
           # Initialize ForumClient
           forum_url = os.getenv("FORUM_BASE_URL")
@@ -69,14 +129,16 @@ jobs:
               exit(1)
           
           # Parse allowed room titles
-          room_titles_str = os.getenv("ROOM_TITLES")
+          default_rooms = "精明消費,理財有道,環球智庫,加點保障,靈活信貸,其他"
+          room_titles_str = os.getenv("ROOM_TITLES", default_rooms)
           if not room_titles_str or not room_titles_str.strip():
-              room_titles_str = "Recent Subjects"
+              room_titles_str = default_rooms
           allowed_room_titles = [title.strip() for title in room_titles_str.split(",") if title.strip()]
           
-          logger.info(f"\nAllowed room titles: {allowed_room_titles}\n")
+          logger.info(f"\nRoom titles: {allowed_room_titles}\n")
           
-          # List conversations from allowed rooms
+          # Collect all conversations from allowed rooms
+          all_conversations = []
           for room in rooms:
               room_guid = room['roomGUID']
               room_title = room['title']
@@ -84,30 +146,41 @@ jobs:
               if room_title not in allowed_room_titles:
                   continue
               
-              logger.info(f"\n{'='*60}")
-              logger.info(f"Room: {room_title}")
-              logger.info(f"{'='*60}")
-              
               conversations = client.get_conversations(room_guid, page_guid)
-              
-              if not conversations:
-                  logger.info("No conversations found in this room.")
-                  continue
-              
-              for i, convo in enumerate(conversations, 1):
-                  title = convo.get('title', 'No Title')
-                  content = convo.get('content', '')
-                  convo_id = convo.get('conversationID', '')
-                  username = convo.get('username', 'Unknown')
-                  
-                  # Preview first 100 characters of content
-                  preview = content[:100] + '...' if len(content) > 100 else content
-                  
-                  logger.info(f"\n{i}. [{convo_id}]")
-                  logger.info(f"   Title: {title}")
-                  logger.info(f"   Username: {username}")
-                  logger.info(f"   Message: {preview}")
+              for convo in conversations:
+                  convo['room_title'] = room_title
+                  all_conversations.append(convo)
           
-          logger.info(f"\n{'='*60}")
+          # Filter by hours if specified
+          if hours_filter:
+              all_conversations = [c for c in all_conversations if is_within_hours(c.get('datePosted', ''), hours_filter)]
+          
+          # Sort by datePosted (newest first)
+          all_conversations.sort(key=lambda c: c.get('datePosted', '') or '', reverse=True)
+          
+          logger.info(f"Total posts found: {len(all_conversations)}")
+          logger.info(f"{'='*80}")
+          
+          for i, convo in enumerate(all_conversations, 1):
+              title = convo.get('title', 'No Title')
+              content = convo.get('content', '')
+              convo_id = convo.get('conversationID', '')
+              username = convo.get('username', 'Unknown')
+              date_posted = convo.get('datePosted', '')
+              room_title = convo.get('room_title', 'Unknown')
+              
+              # Format time to HK timezone using shared utility
+              hk_time = format_hk_time(date_posted)
+              
+              # Preview first 100 characters of content
+              preview = content[:100] + '...' if len(content) > 100 else content
+              
+              logger.info(f"\n{i}. [{room_title}] {hk_time}")
+              logger.info(f"   ID: {convo_id}")
+              logger.info(f"   Title: {title}")
+              logger.info(f"   Username: {username}")
+              logger.info(f"   Message: {preview}")
+          
+          logger.info(f"\n{'='*80}")
           logger.info("=== Listing Complete ===")
           EOF

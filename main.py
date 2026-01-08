@@ -1,4 +1,3 @@
-import logging
 import os
 
 from dotenv import load_dotenv
@@ -6,7 +5,7 @@ from dotenv import load_dotenv
 from ai_handler import AIHandler
 from git_storage import GitStorage
 from forum_client import ForumClient
-from utils import human_delay, logger
+from utils import human_delay, logger, is_within_hours
 
 load_dotenv()
 
@@ -22,12 +21,29 @@ def main():
     password = os.getenv("FORUM_PASSWORD")
     
     # Parse ROOM_TITLES from environment variable
-    room_titles_str = os.getenv("ROOM_TITLES", "Recent Subjects")
+    # Default to the 6 new room titles instead of "Recent Subjects"
+    default_rooms = "精明消費,理財有道,環球智庫,加點保障,靈活信貸,其他"
+    room_titles_str = os.getenv("ROOM_TITLES", default_rooms)
     if not room_titles_str or not room_titles_str.strip():
-        allowed_room_titles = ["Recent Subjects"]
+        allowed_room_titles = [title.strip() for title in default_rooms.split(",")]
     else:
         allowed_room_titles = [title.strip() for title in room_titles_str.split(",") if title.strip()]
     logger.info(f"Allowed room titles: {allowed_room_titles}")
+    
+    # Parse HOURS_FILTER from environment variable (optional)
+    hours_filter = None
+    hours_filter_str = os.getenv("HOURS_FILTER", "")
+    if hours_filter_str and hours_filter_str.strip():
+        try:
+            hours_filter = int(hours_filter_str.strip())
+            if hours_filter <= 0:
+                logger.warning(f"HOURS_FILTER must be positive, ignoring: {hours_filter}")
+                hours_filter = None
+            else:
+                logger.info(f"Using time-based filtering: only posts within last {hours_filter} hours")
+        except ValueError:
+            logger.warning(f"Invalid HOURS_FILTER value '{hours_filter_str}', ignoring")
+            hours_filter = None
 
     client = ForumClient(forum_url, username, password)
 
@@ -46,15 +62,14 @@ def main():
 
     page_guid = page_info.get('pageGUID')
 
-    # 4. Get Room Info (Priority: Recent Subjects)
+    # 4. Get Room Info
     rooms = client.get_room_info(page_guid)
     if not rooms:
         logger.error("No rooms found.")
         return
 
-    # Sort rooms for priority (Recent Subjects first)
-    # Assuming "Recent Subjects" has a specific ID or title
-    priority_rooms = sorted(rooms, key=lambda r: r.get('title') != "Recent Subjects")
+    # Sort rooms alphabetically by title (no special priority)
+    priority_rooms = sorted(rooms, key=lambda r: r.get('title', ''))
 
     found_any_new_post = False
 
@@ -70,7 +85,16 @@ def main():
         # 5. Get Conversations
         conversations = client.get_conversations(room_guid, page_guid)
 
-        new_convos = [c for c in conversations if not storage.is_replied(c['conversationID'])]
+        # Filter posts based on HOURS_FILTER (time-based) or replied status
+        if hours_filter:
+            # Time-based filtering: only posts within the last X hours
+            new_convos = [c for c in conversations 
+                         if is_within_hours(c.get('datePosted', ''), hours_filter)
+                         and not storage.is_replied(c['conversationID'])]
+            logger.info(f"Filtered to {len(new_convos)} posts within last {hours_filter} hours (and not replied)")
+        else:
+            # Traditional filtering: only posts not yet replied to
+            new_convos = [c for c in conversations if not storage.is_replied(c['conversationID'])]
 
         if not new_convos:
             logger.info(f"No new posts in room {room_title}. Moving to next...")
@@ -83,10 +107,12 @@ def main():
             content = convo.get('content', '')
             title = convo.get('title', 'No Title')
             username = convo.get('username', 'Unknown')
+            date_posted = convo.get('datePosted', 'Unknown')
 
             logger.info(f"Processing post {convo_id}...")
             logger.info(f"   Title: {title}")
             logger.info(f"   Username: {username}")
+            logger.info(f"   Posted: {date_posted}")
             logger.info(f"   Message: {content}")
 
             # 6. Generate AI reply
@@ -107,10 +133,7 @@ def main():
                 else:
                     logger.error(f"Failed to process post {convo_id}.")
 
-            # If we replied to something in Recent Subjects, we might want to stop to avoid flooding
-            # Or just continue based on user's preference.
-            # The prompt said "In Recent Subjects can't find new post then go to other sections"
-            # This implies if we find some, we process them.
+            # Continue processing all matched posts
 
     if not found_any_new_post:
         logger.info("Checked all rooms, no new posts found.")
