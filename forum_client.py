@@ -128,12 +128,8 @@ class ForumClient:
 
             rooms = []
 
-            # Explicitly add "Recent Subjects" (Virtual Room with Update ID)
-            rooms.append({
-                "roomGUID": "00000000-0000-0000-0000-000000000000",
-                "title": "Recent Subjects",
-                "topicCount": 0 # Unknown, but priority
-            })
+            # Note: "Recent Subjects" virtual room removed as it's now deprecated
+            # Use specific room titles like: 精明消費, 理財有道, 環球智庫, 加點保障, 靈活信貸, 其他
 
             for room in data.get("Rooms", []):
                 if room.get("IsVisible"):
@@ -183,7 +179,8 @@ class ForumClient:
                     "content": item.get("Message", "") or item.get("Title", ""),
                     "title": item.get("Title", ""),
                     "username": item.get("ParticipantDisplayName", "") or item.get("CreatedByName", "Unknown"),
-                    "isLiked": item.get("IsLiked", False)
+                    "isLiked": item.get("IsLiked", False),
+                    "datePosted": item.get("DatePosted", "")  # ISO 8601 timestamp e.g. "2026-01-07T15:04:51.870Z"
                 })
             return conversations
         except Exception as e:

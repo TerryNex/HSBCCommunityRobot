@@ -17,6 +17,22 @@ on:
         description: 'Custom number of conversations (used only when choice is custom)'
         required: false
         type: string
+      hours_filter_choice:
+        description: 'Reply to posts within last X hours (optional time filter)'
+        required: true
+        default: 'disabled'
+        type: choice
+        options:
+          - 'disabled'
+          - '12'
+          - '24'
+          - '48'
+          - '72'
+          - 'custom'
+      hours_filter_custom:
+        description: 'Custom hours filter (used only when choice is custom)'
+        required: false
+        type: string
 
 jobs:
   run-reply-bot:
@@ -71,6 +87,32 @@ jobs:
           echo "limit=$LIMIT" >> $GITHUB_OUTPUT
           echo "Final conversation limit: $LIMIT"
       
+      - name: Determine hours filter
+        id: determine-hours
+        run: |
+          CHOICE="${{ github.event.inputs.hours_filter_choice }}"
+          CUSTOM="${{ github.event.inputs.hours_filter_custom }}"
+          
+          if [ "$CHOICE" = "disabled" ]; then
+            HOURS=""
+            echo "Hours filter: disabled (using replied posts tracking)"
+          elif [ "$CHOICE" = "custom" ] && [ -n "$CUSTOM" ]; then
+            # Validate that custom is a number
+            if [[ "$CUSTOM" =~ ^[0-9]+$ ]]; then
+              HOURS="$CUSTOM"
+            else
+              echo "Invalid custom hours value, disabling hours filter"
+              HOURS=""
+            fi
+          else
+            HOURS="$CHOICE"
+          fi
+          
+          echo "hours=$HOURS" >> $GITHUB_OUTPUT
+          if [ -n "$HOURS" ]; then
+            echo "Hours filter: $HOURS hours"
+          fi
+      
       - name: Run reply bot
         env:
           FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
@@ -78,6 +120,7 @@ jobs:
           FORUM_PASSWORD: ${{ vars.FORUM_PASSWORD }}
           ROOM_TITLES: ${{ vars.ROOM_TITLES }}
           CONVERSATION_LIMIT: ${{ steps.determine-limit.outputs.limit }}
+          HOURS_FILTER: ${{ steps.determine-hours.outputs.hours }}
           AI_API_KEY: ${{ vars.AI_API_KEY }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           RANDOM_DELAY_RANGE: ${{ vars.RANDOM_DELAY_RANGE }}
