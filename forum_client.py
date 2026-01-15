@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 INITIAL_BACKOFF_SECONDS = 2
 
+
+def _calculate_backoff(attempt):
+    """Calculate exponential backoff time for retry attempts."""
+    return INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1))
+
+
+def _truncate_response_body(text, max_length=500):
+    """Truncate response body for logging, handling empty/None values."""
+    return text[:max_length] if text else 'empty'
+
 class ForumClient:
     """
     Implements the real 6-step forum interaction logic for HSBC Community (Square Community).
@@ -257,10 +267,10 @@ class ForumClient:
                 # Check for server errors specifically
                 if response.status_code >= 500:
                     logger.warning(f"Server error {response.status_code} on attempt {attempt}/{MAX_RETRIES}")
-                    logger.debug(f"Response body: {response.text[:500] if response.text else 'empty'}")
+                    logger.debug(f"Response body: {_truncate_response_body(response.text)}")
                     
                     if attempt < MAX_RETRIES:
-                        backoff_time = INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                        backoff_time = _calculate_backoff(attempt)
                         logger.info(f"Retrying in {backoff_time} seconds...")
                         time.sleep(backoff_time)
                         continue
@@ -293,10 +303,10 @@ class ForumClient:
                 # Log additional details for debugging
                 if hasattr(e, 'response') and e.response is not None:
                     logger.debug(f"Error response status: {e.response.status_code}")
-                    logger.debug(f"Error response body: {e.response.text[:500] if e.response.text else 'empty'}")
+                    logger.debug(f"Error response body: {_truncate_response_body(e.response.text)}")
                 
                 if attempt < MAX_RETRIES:
-                    backoff_time = INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                    backoff_time = _calculate_backoff(attempt)
                     logger.info(f"Retrying in {backoff_time} seconds...")
                     time.sleep(backoff_time)
                 else:
