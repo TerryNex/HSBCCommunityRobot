@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 
 import requests
 
@@ -8,6 +9,20 @@ from config_manager import ConfigManager
 from utils import get_random_headers
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_BACKOFF_SECONDS = 2
+
+
+def _calculate_backoff(attempt):
+    """Calculate exponential backoff time for retry attempts."""
+    return INITIAL_BACKOFF_SECONDS * (2 ** (attempt - 1))
+
+
+def _truncate_response_body(text, max_length=500):
+    """Truncate response body for logging, handling empty/None values."""
+    return text[:max_length] if text else 'empty'
 
 class ForumClient:
     """
@@ -206,7 +221,10 @@ class ForumClient:
             return []
 
     def reply_and_like(self, room_guid, post_guid, message):
-        """Step 6 & 7: Reply to conversation and Like the new reply."""
+        """Step 6 & 7: Reply to conversation and Like the new reply.
+        
+        Implements retry logic with exponential backoff for handling transient failures.
+        """
         logger.info(f"Step 6: Replying to post {post_guid}...")
         url_reply = f"{self.command_url}/ConversationService/ReplyToConversation"
 
@@ -224,33 +242,83 @@ class ForumClient:
         # Use files format for multipart/form-data submission
         # The tuple format is: (filename, content)
         # When filename=None, it creates a plain form field (not a file upload)
+        request_body = json.dumps(inner_request, separators=(',', ':'), ensure_ascii=False)
         files = {
-            "request": (
-                None,
-                json.dumps(inner_request, separators=(',', ':'), ensure_ascii=False)
-            )
+            "request": (None, request_body)
         }
+        
+        # Log request details (excluding Authorization header for security)
+        logger.debug(f"Request URL: {url_reply}")
+        logger.debug(f"Request payload (Room): {room_guid}")
+        logger.debug(f"Request payload (Guid): {post_guid}")
+        logger.debug(f"Request payload (Message length): {len(message)} chars")
 
-        try:
-            # 1. Reply using self.session
-            response = self.session.post(url_reply, files=files)
-            response.raise_for_status()
-            
-            # Response is the new Conversation GUID (string)
-            new_reply_guid = response.text.replace('"', '')
-            logger.info(f"Reply successful. New GUID: {new_reply_guid}")
-            
-            # 2. Like (Step 7)
-            logger.info(f"Step 7: Liking the new reply {new_reply_guid}...")
-            url_like = f"{self.command_url}/ConversationService/LikeConversation"
-            like_payload = {"ConversationGuid": new_reply_guid}
-            
-            # Use self.session for Like request as well
-            _like_response = self.session.post(url_like, json=like_payload)
-            _like_response.raise_for_status()
-            logger.info("Like successful.")
+        # Retry logic with exponential backoff
+        last_exception = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                # 1. Reply using self.session
+                response = self.session.post(url_reply, files=files)
+                
+                # Log response details for debugging
+                logger.debug(f"Response status: {response.status_code}")
+                logger.debug(f"Response headers: {dict(response.headers)}")
+                
+                # Check for server errors specifically
+                if response.status_code >= 500:
+                    logger.warning(f"Server error {response.status_code} on attempt {attempt}/{MAX_RETRIES}")
+                    logger.debug(f"Response body: {_truncate_response_body(response.text)}")
+                    
+                    if attempt < MAX_RETRIES:
+                        backoff_time = _calculate_backoff(attempt)
+                        logger.info(f"Retrying in {backoff_time} seconds...")
+                        time.sleep(backoff_time)
+                        continue
+                    else:
+                        logger.error(f"Max retries ({MAX_RETRIES}) reached for reply to post {post_guid}")
+                        return False
+                
+                response.raise_for_status()
+                
+                # Response is the new Conversation GUID (string)
+                new_reply_guid = response.text.replace('"', '')
+                logger.info(f"Reply successful. New GUID: {new_reply_guid}")
+                
+                # 2. Like (Step 7)
+                logger.info(f"Step 7: Liking the new reply {new_reply_guid}...")
+                url_like = f"{self.command_url}/ConversationService/LikeConversation"
+                like_payload = {"ConversationGuid": new_reply_guid}
+                
+                # Use self.session for Like request as well
+                _like_response = self.session.post(url_like, json=like_payload)
+                _like_response.raise_for_status()
+                logger.info("Like successful.")
 
-            return True
-        except Exception as e:
-            logger.error(f"Reply/Like failed: {e}")
-            return False
+                return True
+                
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                logger.warning(f"Request failed on attempt {attempt}/{MAX_RETRIES}: {e}")
+                
+                # Log additional details for debugging
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.debug(f"Error response status: {e.response.status_code}")
+                    logger.debug(f"Error response body: {_truncate_response_body(e.response.text)}")
+                
+                if attempt < MAX_RETRIES:
+                    backoff_time = _calculate_backoff(attempt)
+                    logger.info(f"Retrying in {backoff_time} seconds...")
+                    time.sleep(backoff_time)
+                else:
+                    logger.error(f"Max retries ({MAX_RETRIES}) reached. Last error: {e}")
+                    
+            except Exception as e:
+                # Catch unexpected errors
+                last_exception = e
+                logger.error(f"Unexpected error on attempt {attempt}/{MAX_RETRIES}: {e}")
+                if attempt >= MAX_RETRIES:
+                    break
+        
+        # If we exhausted all retries, log and return False
+        logger.error(f"Reply/Like failed after {MAX_RETRIES} attempts for post {post_guid}. Skipping to next post.")
+        return False
