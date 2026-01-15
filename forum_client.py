@@ -255,70 +255,90 @@ class ForumClient:
 
         # Retry logic with exponential backoff
         last_exception = None
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                # 1. Reply using self.session
-                response = self.session.post(url_reply, files=files)
-                
-                # Log response details for debugging
-                logger.debug(f"Response status: {response.status_code}")
-                logger.debug(f"Response headers: {dict(response.headers)}")
-                
-                # Check for server errors specifically
-                if response.status_code >= 500:
-                    logger.warning(f"Server error {response.status_code} on attempt {attempt}/{MAX_RETRIES}")
-                    logger.debug(f"Response body: {_truncate_response_body(response.text)}")
+        
+        # Save the Content-Type header value so we can restore it later
+        # The reply request needs multipart/form-data (set automatically by requests when using files)
+        # but the session has application/json preset which would interfere
+        saved_content_type = self.session.headers.get('Content-Type')
+        
+        try:
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    # Remove Content-Type header so requests can set multipart/form-data with proper boundary
+                    # This needs to be done on each attempt in case it was restored for a previous like attempt
+                    self.session.headers.pop('Content-Type', None)
+                    
+                    # 1. Reply using self.session
+                    response = self.session.post(url_reply, files=files)
+                    
+                    # Log response details for debugging
+                    logger.debug(f"Response status: {response.status_code}")
+                    logger.debug(f"Response headers: {dict(response.headers)}")
+                    
+                    # Check for server errors specifically
+                    if response.status_code >= 500:
+                        logger.warning(f"Server error {response.status_code} on attempt {attempt}/{MAX_RETRIES}")
+                        logger.debug(f"Response body: {_truncate_response_body(response.text)}")
+                        
+                        if attempt < MAX_RETRIES:
+                            backoff_time = _calculate_backoff(attempt)
+                            logger.info(f"Retrying in {backoff_time} seconds...")
+                            time.sleep(backoff_time)
+                            continue
+                        else:
+                            logger.error(f"Max retries ({MAX_RETRIES}) reached for reply to post {post_guid}")
+                            return False
+                    
+                    response.raise_for_status()
+                    
+                    # Response is the new Conversation GUID (string)
+                    new_reply_guid = response.text.replace('"', '')
+                    logger.info(f"Reply successful. New GUID: {new_reply_guid}")
+                    
+                    # 2. Like (Step 7)
+                    # Note: The Content-Type header will be restored in the finally block
+                    # but we need it for the JSON Like request, so restore it early here
+                    if saved_content_type:
+                        self.session.headers['Content-Type'] = saved_content_type
+                    
+                    logger.info(f"Step 7: Liking the new reply {new_reply_guid}...")
+                    url_like = f"{self.command_url}/ConversationService/LikeConversation"
+                    like_payload = {"ConversationGuid": new_reply_guid}
+                    
+                    # Use self.session for Like request as well
+                    _like_response = self.session.post(url_like, json=like_payload)
+                    _like_response.raise_for_status()
+                    logger.info("Like successful.")
+
+                    return True
+                    
+                except requests.exceptions.RequestException as e:
+                    last_exception = e
+                    logger.warning(f"Request failed on attempt {attempt}/{MAX_RETRIES}: {e}")
+                    
+                    # Log additional details for debugging
+                    if hasattr(e, 'response') and e.response is not None:
+                        logger.debug(f"Error response status: {e.response.status_code}")
+                        logger.debug(f"Error response body: {_truncate_response_body(e.response.text)}")
                     
                     if attempt < MAX_RETRIES:
                         backoff_time = _calculate_backoff(attempt)
                         logger.info(f"Retrying in {backoff_time} seconds...")
                         time.sleep(backoff_time)
-                        continue
                     else:
-                        logger.error(f"Max retries ({MAX_RETRIES}) reached for reply to post {post_guid}")
-                        return False
-                
-                response.raise_for_status()
-                
-                # Response is the new Conversation GUID (string)
-                new_reply_guid = response.text.replace('"', '')
-                logger.info(f"Reply successful. New GUID: {new_reply_guid}")
-                
-                # 2. Like (Step 7)
-                logger.info(f"Step 7: Liking the new reply {new_reply_guid}...")
-                url_like = f"{self.command_url}/ConversationService/LikeConversation"
-                like_payload = {"ConversationGuid": new_reply_guid}
-                
-                # Use self.session for Like request as well
-                _like_response = self.session.post(url_like, json=like_payload)
-                _like_response.raise_for_status()
-                logger.info("Like successful.")
-
-                return True
-                
-            except requests.exceptions.RequestException as e:
-                last_exception = e
-                logger.warning(f"Request failed on attempt {attempt}/{MAX_RETRIES}: {e}")
-                
-                # Log additional details for debugging
-                if hasattr(e, 'response') and e.response is not None:
-                    logger.debug(f"Error response status: {e.response.status_code}")
-                    logger.debug(f"Error response body: {_truncate_response_body(e.response.text)}")
-                
-                if attempt < MAX_RETRIES:
-                    backoff_time = _calculate_backoff(attempt)
-                    logger.info(f"Retrying in {backoff_time} seconds...")
-                    time.sleep(backoff_time)
-                else:
-                    logger.error(f"Max retries ({MAX_RETRIES}) reached. Last error: {e}")
-                    
-            except Exception as e:
-                # Catch unexpected errors
-                last_exception = e
-                logger.error(f"Unexpected error on attempt {attempt}/{MAX_RETRIES}: {e}")
-                if attempt >= MAX_RETRIES:
-                    break
-        
-        # If we exhausted all retries, log and return False
-        logger.error(f"Reply/Like failed after {MAX_RETRIES} attempts for post {post_guid}. Skipping to next post.")
-        return False
+                        logger.error(f"Max retries ({MAX_RETRIES}) reached. Last error: {e}")
+                        
+                except Exception as e:
+                    # Catch unexpected errors
+                    last_exception = e
+                    logger.error(f"Unexpected error on attempt {attempt}/{MAX_RETRIES}: {e}")
+                    if attempt >= MAX_RETRIES:
+                        break
+            
+            # If we exhausted all retries, log and return False
+            logger.error(f"Reply/Like failed after {MAX_RETRIES} attempts for post {post_guid}. Skipping to next post.")
+            return False
+        finally:
+            # Restore Content-Type header to session
+            if saved_content_type:
+                self.session.headers['Content-Type'] = saved_content_type
