@@ -91,7 +91,36 @@ These variables must be set in your `.env` file (local) or as GitHub Repository 
 3. Click "Run workflow"
 4. Check the logs to see the list of recent conversations
 
-### Workflow 2: Run Reply Bot
+### Workflow 2: Daily Reply Bot (Automated)
+
+**File:** `.github/workflows/daily-reply.yml`
+
+**Purpose:** Automated daily reply bot that runs at a fixed time.
+
+**Trigger:** 
+- Scheduled: Daily at 10:00 Hong Kong Time (02:00 UTC)
+- Manual: `workflow_dispatch`
+
+**Fixed Parameters:**
+- `CONVERSATION_LIMIT`: 15 conversations
+- `HOURS_FILTER`: 21 hours (replies to posts from the last 21 hours)
+
+**Behavior:**
+- Runs automatically every day at 10:00 HKT
+- Fetches conversations from allowed rooms
+- Filters posts older than 21 hours
+- Filters out already-replied posts (using replied_posts.json)
+- Generates AI replies for up to 15 conversations
+- Posts replies and likes them
+- Commits and pushes updated replied_posts.json to repository
+
+**How to manually trigger:**
+1. Go to Actions tab in GitHub
+2. Select "Daily Reply Bot" workflow
+3. Click "Run workflow"
+4. Check the logs to see the bot's activity
+
+### Workflow 3: Run Reply Bot (Manual)
 
 **File:** `.github/workflows/run-reply-bot.yml`
 

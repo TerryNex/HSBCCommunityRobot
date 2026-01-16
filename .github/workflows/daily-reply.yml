@@ -1,0 +1,83 @@
+# This workflow runs once per day at 10:00 Hong Kong time (02:00 UTC).
+# When triggered, it processes 15 conversations and replies to posts within the last 21 hours.
+
+name: Daily Reply Bot
+
+on:
+  # Schedule: Run once per day at 10:00 HKT (02:00 UTC)
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 02:00 UTC (10:00 HKT)
+  
+  # Manual trigger
+  workflow_dispatch:
+
+env:
+  # Fixed parameters for this workflow
+  CONVERSATION_LIMIT: '15'
+  HOURS_FILTER: '21'
+
+jobs:
+  daily-reply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Install dependencies
+        run: |
+          pip install requests python-dotenv
+      
+      - name: Download previous replied posts data
+        continue-on-error: true
+        run: |
+          if [ -f replied_posts.json ]; then
+            echo "replied_posts.json already exists in checkout"
+          else
+            echo "No previous replied_posts.json found, will start fresh"
+          fi
+      
+      - name: Run reply bot
+        env:
+          FORUM_BASE_URL: ${{ vars.FORUM_BASE_URL }}
+          FORUM_USERNAME: ${{ vars.FORUM_USERNAME }}
+          FORUM_PASSWORD: ${{ vars.FORUM_PASSWORD }}
+          ROOM_TITLES: ${{ vars.ROOM_TITLES }}
+          CONVERSATION_LIMIT: ${{ env.CONVERSATION_LIMIT }}
+          HOURS_FILTER: ${{ env.HOURS_FILTER }}
+          AI_API_KEY: ${{ vars.AI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          RANDOM_DELAY_RANGE: ${{ vars.RANDOM_DELAY_RANGE }}
+        run: |
+          echo "Running with CONVERSATION_LIMIT=$CONVERSATION_LIMIT and HOURS_FILTER=$HOURS_FILTER"
+          python main.py
+      
+      - name: Commit and push replied posts data
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          if [ -f replied_posts.json ]; then
+            git add replied_posts.json
+            
+            if git diff --staged --quiet; then
+              echo "No changes to replied_posts.json, skipping commit"
+            else
+              git commit -m "chore: update replied posts data [skip ci]"
+              git push
+              echo "Successfully committed and pushed replied posts data"
+            fi
+          else
+            echo "replied_posts.json not found, nothing to commit"
+          fi
