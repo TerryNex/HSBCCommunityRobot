@@ -4,9 +4,9 @@ FRA 是一個基於 Python 的自動化討論區回帖工具，旨在模擬真�
 
 ## 發展目標
 
-- **自動化**：定時抓取帖子並回覆。
+- **自動化**：每天定時於香港時間 10:00 自動抓取帖子並回覆。
 - **抗檢測**：通過隨機延遲、模擬 User-Agent、AI 提示工程（Prompt Engineering）等手段，避免被識別為機器人。
-- **去重**：使用 SQLite 記錄已回覆的帖子 ID。
+- **去重**：使用 JSON 文件記錄已回覆的帖子 ID。
 
 ## 主要模組
 
@@ -18,6 +18,8 @@ FRA 是一個基於 Python 的自動化討論區回帖工具，旨在模擬真�
 
 ## 部署指南
 
+### 本地運行
+
 1. **安裝環境**:
 
    ```bash
@@ -26,12 +28,22 @@ FRA 是一個基於 Python 的自動化討論區回帖工具，旨在模擬真�
 
 2. **配置變數**:
    在根目錄創建 `.env` 文件，填入 AI API Key 和目標論壇配置。
-3. **定時任務 (Linux)**:
-   使用 `crontab -e` 設置每小時執行一次：
 
+3. **手動運行**:
    ```bash
-   0 * * * * python3 /path/to/project/main.py >> /path/to/project/cron.log 2>&1
+   python3 main.py
    ```
+
+### GitHub Actions 自動化部署
+
+本項目已配置 GitHub Actions 工作流，實現每日自動回帖：
+
+- **Daily Reply Bot**：每天香港時間 10:00 自動運行
+  - 自動處理 15 個對話
+  - 回覆最近 21 小時內的帖子
+  - 自動提交已回覆記錄
+
+詳細配置請參考 [CONFIGURATION.md](CONFIGURATION.md)。
 
 ## 注意事項
 
